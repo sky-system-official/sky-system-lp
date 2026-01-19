@@ -1,38 +1,46 @@
-import { StrictMode, useEffect } from "react";
-import { createRoot } from "react-dom/client";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+// src/main.tsx
+import { useEffect } from "react";
+import ReactDOM from "react-dom/client";
+import { createHashRouter, RouterProvider } from "react-router-dom";
+
 import App from "./App";
 import ApplyPage from "./pages/ApplyPage";
 import ApplyThanksPage from "./pages/ApplyThanksPage";
 import ContactPage from "./pages/ContactPage";
 import ContactThanksPage from "./pages/ContactThanksPage";
+
 import "./index.css";
 
-// AOS をインポート
+// AOS
 import AOS from "aos";
 import "aos/dist/aos.css";
 
-const router = createBrowserRouter([
-  { path: "/", element: <App /> },
-  { path: "/apply", element: <ApplyPage /> },                   // 応募
-  { path: "/apply/thanks", element: <ApplyThanksPage /> },      // 応募サンクス
-  { path: "/contact", element: <ContactPage /> },               // お問い合わせ
-  { path: "/contact/thanks", element: <ContactThanksPage /> },  // お問い合わせサンクス
+import MainLayout from "./layouts/MainLayout";
+
+const router = createHashRouter([
+  {
+    element: <MainLayout />, // ← 共通ヘッダー
+    children: [
+      { path: "/", element: <App /> },
+      { path: "/apply", element: <ApplyPage /> },
+      { path: "/apply/thanks", element: <ApplyThanksPage /> },
+      { path: "/contact", element: <ContactPage /> },
+      { path: "/contact/thanks", element: <ContactThanksPage /> },
+    ],
+  },
 ]);
 
-const Root = () => {
+function Root() {
   useEffect(() => {
     AOS.init({
-      duration: 1000, // アニメーションの時間（ms）
-      once: true,     // 一度だけ実行
+      duration: 1000,
+      once: true,
     });
   }, []);
 
   return <RouterProvider router={router} />;
-};
+}
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <Root />
-  </StrictMode>
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <Root />
 );

@@ -11,13 +11,22 @@ const app = express();
 
 // 基本ミドルウェア（ FE ＝＝ DB・インフラ の仲介役）主に、認証やエラーハンドリングなど。
 app.use(helmet());
-app.use(cors({ origin: (process.env.CORS_ORIGIN || "").split(",").filter(Boolean) || true }));
+const origins = (process.env.CORS_ORIGIN ?? "")
+  .split(",")
+  .map(s => s.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: origins.length ? origins : true
+  })
+);
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 // レート制限（/api/* だけ）
 app.use(
-  "/api/",
+  "/api",
   rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
@@ -42,5 +51,4 @@ app.use((_req, res) => res.status(404).json({ ok: false, message: "Not Found" })
 const port = Number(process.env.PORT || 8787);
 app.listen(port, () => {
   console.log(`API listening on http://localhost:${port}`);
-  console.log("Mounted routes: POST /api/contact, GET /api/ping, GET /healthz");
 });

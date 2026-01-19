@@ -1,54 +1,114 @@
 import { Router } from "express";
 import multer from "multer";
-import { applySchema } from "../lib/validations";
-import { notify } from "../lib/mailer";
+import { z } from "zod";
+import { mailer, MAIL_FROM, MAIL_TO } from "../lib/mailer";
 
 const router = Router();
+const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+const ApplySchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+  phone: z.string().min(1),
+  message: z.string().min(1),
+  portfolio: z.string().optional().or(z.literal("")),
+  github: z.string().optional().or(z.literal("")),
+  resumeUrl: z.string().optional().or(z.literal("")),
+  // positions[] は複数になる想定
+  positions: z.array(z.string()).min(1),
 });
 
 router.post("/", upload.single("resumeFile"), async (req, res) => {
+  console.log("📩 /api/apply called");
+  console.log("body:", req.body);
+  console.log("file:", req.file);
+
+  // FormData の場合、配列は色々な形で来るので吸収
+  const raw = req.body["positions[]"] ?? req.body.positions ?? req.body.position;
+  const positions = Array.isArray(raw) ? raw : raw ? [raw] : [];
+
+  const data = {
+    ...req.body,
+    positions,
+  };
+
+  const parsed = ApplySchema.safeParse(data);
+  if (!parsed.success) {
+    console.error("❌ apply zod error:", parsed.error.issues);
+    return res.status(400).json({
+      ok: false,
+      message: "Invalid input",
+      issues: parsed.error.issues,
+    });
+  }
+
+  const { name, email, phone, message, portfolio, github, resumeUrl } = parsed.data;
+
+  if (!resumeUrl?.trim() && !req.file) {
+    return res.status(400).json({ ok: false, message: "resumeUrl or resumeFile is required" });
+  }
+
+  const subject = `【LP応募】${name} 様（${parsed.data.positions.join(" / ")}）`;
+  const text =
+`LPから応募がありました。
+
+■ 応募職種
+${parsed.data.positions.join(" / ")}
+
+■ お名前
+${name}
+
+■ メール
+${email}
+
+■ 電話番号
+${phone}
+
+■ ポートフォリオ
+${portfolio || "-"}
+
+■ GitHub
+${github || "-"}
+
+■ 職務経歴書/スキルシートURL
+${resumeUrl || "-"}
+
+■ 自己PR・備考
+${message}
+`;
+
+  const fixedOriginalname = req.file
+    ? Buffer.from(req.file.originalname, "latin1").toString("utf8")
+    : "";
+
+  const attachments = req.file
+    ? [{
+        filename: fixedOriginalname,
+        content: req.file.buffer,
+        contentType: req.file.mimetype,
+        headers: {
+          // RFC2231 / RFC5987 対応（日本語ファイル名の決定版）
+          "Content-Disposition":
+            `attachment; filename*=UTF-8''${encodeURIComponent(fixedOriginalname)}`
+        },
+      }]
+    : [];
+
   try {
-    const data = applySchema.parse(req.body);
-
-    const hasResume = Boolean(data.resumeUrl) || Boolean(req.file);
-    if (!hasResume) {
-      return res.status(422).json({ ok: false, message: "履歴書はURLまたはファイルのどちらか必須です。" });
-    }
-
-    const fileLine = req.file
-      ? `${req.file.originalname} (${req.file.mimetype}, ${req.file.size} bytes)`
-      : "(なし)";
-
-    const subject = `【応募】${data.position} - ${data.name}`;
-    const text = [
-      `応募職種: ${data.position}`,
-      `お名前: ${data.name}`,
-      `メール: ${data.email}`,
-      `ポートフォリオ: ${data.portfolio || "(なし)"}`,
-      `GitHub: ${data.github || "(なし)"}`,
-      `履歴書URL: ${data.resumeUrl || "(なし)"}`,
-      `履歴書ファイル: ${fileLine}`,
-      `---`,
-      data.message,
-    ].join("\n");
-
-    // 添付として送る場合は transporter.sendMail の attachments を利用（推奨はS3等に保存してURL通知）
-    await notify(process.env.MAIL_TO || "", subject, text);
+    await mailer.sendMail({
+      from: MAIL_FROM,
+      to: MAIL_TO,
+      replyTo: email,
+      subject,
+      // （文字化け対策）
+      text,
+      attachments,
+    });
 
     return res.json({ ok: true });
-  } catch (e: any) {
-    if (e.code === "LIMIT_FILE_SIZE") {
-      return res.status(413).json({ ok: false, message: "ファイルサイズは10MB以下にしてください。" });
-    }
-    if (e.errors) {
-      return res.status(422).json({ ok: false, message: "入力エラー", errors: e.errors });
-    }
+  } catch (e) {
     console.error(e);
-    return res.status(500).json({ ok: false, message: "サーバーエラー" });
+    return res.status(500).json({ ok: false, message: "Mail send failed" });
   }
 });
 

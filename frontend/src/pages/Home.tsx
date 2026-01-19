@@ -1,3 +1,13 @@
+import type { MouseEvent } from "react";
+
+const scrollToContact = (e: MouseEvent<HTMLAnchorElement>) => {
+  e.preventDefault(); // ← URLの #contact を使わせない
+  document.getElementById("contact")?.scrollIntoView({
+    behavior: "smooth",
+    block: "start",
+  });
+};
+
 const Home = () => {
   return (
     <div>
@@ -5,7 +15,7 @@ const Home = () => {
       <section
         className="relative flex flex-col items-center justify-center text-center bg-gradient-to-r from-sky-300 via-sky-400 to-sky-500 text-white min-h-[40vh]"
       >
-        <div className="absolute inset-0 bg-black/10"></div>
+        <div className="absolute inset-0 bg-black/10" />
 
         <div className="relative z-10 max-w-5xl px-6">
         <h1
@@ -24,6 +34,7 @@ const Home = () => {
           </p>
           <a
             href="#contact"
+            onClick={scrollToContact}
             className="inline-block bg-white text-sky-600 px-6 py-2 rounded-full font-bold text-2xl shadow-lg
                       transition hover:bg-blue-600 hover:text-white"
             data-aos="fade-up"

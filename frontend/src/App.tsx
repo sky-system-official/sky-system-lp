@@ -1,52 +1,64 @@
+import { useEffect, useState } from "react";
+import AOS from "aos";
+import "aos/dist/aos.css";
+
 import Home from "./pages/Home";
 import WorksSection from "./components/WorksSection";
 import CompanySection from "./components/CompanySection";
 import RecruitSection from "./components/RecruitSection";
 import ContactForm from "./components/ContactForm";
-import Logo from "./assets/favicon_4.png";
 
 function App() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    // AOS 初期化
+    AOS.init({
+      once: true,
+      duration: 250,
+      easing: "ease-out-cubic",
+    });
+    AOS.refresh();
+
+    // window.onload を待ってから 0.5秒後に表示
+    const onLoad = () => {
+      setTimeout(() => setReady(true), 1);
+    };
+
+    if (document.readyState === "complete") {
+      onLoad();
+    } else {
+      window.addEventListener("load", onLoad);
+      return () => window.removeEventListener("load", onLoad);
+    }
+  }, []);
+
+  if (!ready) {
+    // 準備が整うまで白背景のみ表示
+    return <div className="h-screen w-screen bg-white"></div>;
+  }
+
   return (
     <>
-      {/* ナビゲーション */}
-      <header className="bg-gradient-to-r from-sky-400 via-sky-500 to-sky-500 text-white shadow fixed w-full z-50">
-        <nav className="max-w-6xl mx-auto flex items-center justify-between p-4">
-          {/* 左側：ロゴ + 会社名 */}
-          <div className="flex items-center gap-3">
-            <img
-              src={Logo}
-              alt="SKYシステム合同会社 ロゴ"
-              className="h-8 w-8 rounded-md"
-            />
-            <h1 className="text-lg md:text-2xl font-bold">SKYシステム合同会社</h1>
-          </div>
-
-          {/* 右側：ナビメニュー */}
-          <div className="flex gap-6 text-lg">
-            <a href="#hero" className="hover:text-black hover:font-bold">ホーム</a>
-            <a href="#works" className="hover:text-black hover:font-bold">実績紹介</a>
-            <a href="#company" className="hover:text-black hover:font-bold">会社概要</a>
-            <a href="#recruit" className="hover:text-black hover:font-bold">採用情報</a>
-            <a href="#contact" className="hover:text-black hover:font-bold">お問い合わせ</a>
-          </div>
-        </nav>
-      </header>
-
       {/* 各セクション */}
-      <main className="pt-20"> {/* ヘッダー固定分の余白 */}
-        <section id="hero">
+      <main className="pt-20">
+        <section id="hero" className="scroll-mt-24 -mt-6 py-4" data-aos="fade-up">
           <Home />
         </section>
-        <section id="works">
+
+        <section id="works" className="scroll-mt-24 py-8" data-aos="fade-up">
           <WorksSection />
         </section>
-        <section id="company">
+
+        <section id="company" className="scroll-mt-24 py-8" data-aos="fade-up">
           <CompanySection />
         </section>
-        <section id="recruit">
+
+        <section id="recruit" className="scroll-mt-24 py-8" data-aos="fade-up">
           <RecruitSection />
         </section>
-        <section id="contact">
+
+        <section id="contact" className="scroll-mt-24 py-8" data-aos="fade-up">
           <ContactForm />
         </section>
       </main>

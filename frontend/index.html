@@ -1,13 +1,32 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React + TS</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- favicon -->
+  <link rel="icon" href="./favicon.png" />
+
+  <!-- AOS の対象を初期から非表示にする -->
+  <style>
+    [data-aos] {
+      opacity: 0 !important;
+      visibility: hidden !important;
+    }
+
+    [data-aos].aos-animate {
+      opacity: 1 !important;
+      visibility: visible !important;
+    }
+  </style>
+
+  <title>SKYシステム合同会社</title>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
 </html>

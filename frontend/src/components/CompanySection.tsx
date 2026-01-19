@@ -1,6 +1,23 @@
+type CompanyItem = {
+  label: string;
+  value: string;
+};
+
+const COMPANY_INFO: CompanyItem[] = [
+  { label: "会社名", value: "SKYシステム合同会社" },
+  { label: "所在地", value: "北海道苫小牧市美原町3-16-11" },
+  { label: "設立", value: "2024年5月" },
+  { label: "代表者", value: "代表社員　今野 大地" },
+  {
+    label: "事業内容",
+    value:
+      "システム開発、アプリ開発、ゲーム開発、AI事業、ツール開発、スクレイピング など",
+  },
+];
+
 const CompanySection = () => {
   return (
-    <div className="max-w-6xl mx-auto px-6 py-20">
+    <section className="max-w-6xl mx-auto px-6 py-20">
       <h2
         className="text-3xl font-bold text-center mb-12"
         data-aos="fade-up"
@@ -14,42 +31,18 @@ const CompanySection = () => {
           data-aos="fade-up"
         >
           <tbody>
-            <tr className="border-b">
-              <th className="w-1/3 bg-gray-100 text-left px-4 py-3 font-semibold">
-                会社名
-              </th>
-              <td className="px-4 py-3">SKYシステム合同会社</td>
-            </tr>
-            <tr className="border-b">
-              <th className="bg-gray-100 text-left px-4 py-3 font-semibold">
-                所在地
-              </th>
-              <td className="px-4 py-3">北海道苫小牧市美原町3-16-11</td>
-            </tr>
-            <tr className="border-b">
-              <th className="bg-gray-100 text-left px-4 py-3 font-semibold">
-                設立
-              </th>
-              <td className="px-4 py-3">2024年5月</td>
-            </tr>
-            <tr className="border-b">
-              <th className="bg-gray-100 text-left px-4 py-3 font-semibold">
-                代表者
-              </th>
-              <td className="px-4 py-3">代表社員 今野 大地</td>
-            </tr>
-            <tr>
-              <th className="bg-gray-100 text-left px-4 py-3 font-semibold">
-                事業内容
-              </th>
-              <td className="px-4 py-3">
-                システム開発、アプリ開発、ゲーム開発、AI事業、ツール開発、スクレイピング...など
-              </td>
-            </tr>
+            {COMPANY_INFO.map(({ label, value }) => (
+              <tr key={label} className="border-b last:border-b-0">
+                <th className="w-1/3 bg-gray-100 text-left px-4 py-3 font-semibold">
+                  {label}
+                </th>
+                <td className="px-4 py-3">{value}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
   );
 };
 

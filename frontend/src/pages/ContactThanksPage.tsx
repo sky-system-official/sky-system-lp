@@ -11,7 +11,8 @@ const ContactThanksPage = () => {
       <h1 className="text-3xl font-bold mb-6">お問い合わせありがとうございました！</h1>
       <p className="text-gray-700 mb-6">
         {s.name ? `${s.name} 様、` : ""}メッセージを受け付けました。<br />
-        担当者より追ってご連絡いたします。
+        担当者が内容を確認し、追ってご連絡いたします。<br /><br />
+        今しばらくお待ちくださいませ。
       </p>
 
       <div className="flex gap-4 justify-center">

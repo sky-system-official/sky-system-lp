@@ -2,6 +2,48 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* --- nav link --- */
+.nav-link {
+  @apply relative font-semibold tracking-wide transition-colors duration-200 hover:text-neutral-900;
+}
+
+.nav-link::after {
+  content: "";
+  @apply absolute left-0 -bottom-1 h-[2px] w-full bg-neutral-900 scale-x-0 origin-left transition-transform duration-200;
+}
+
+.nav-link:hover::after {
+  @apply scale-x-100;
+}
+
 html {
   scroll-behavior: smooth;
+}
+
+/* AOSの対象は初期状態から非表示にしておく */
+[data-aos] {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 1s ease, transform 1s ease;
+}
+
+[data-aos].aos-animate {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* ← フォールバック：AOS失敗/未初期化の時だけ見えるようにする */
+body.aos-fallback [data-aos] {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+/* 共通フェードアップ（Heroと同じ効果を再現するカスタムクラス） */
+.aos-fade-section[data-aos] {
+  opacity: 0;
+  transform: translateY(50px);
+  transition-property: opacity, transform;
+  transition-duration: 2500ms;
+  transition-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1);
 }

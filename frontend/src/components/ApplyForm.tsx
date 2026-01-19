@@ -1,160 +1,228 @@
 import { useEffect, useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
 type Props = { initialPosition?: string };
 
-const positions = [
+const API_BASE = import.meta.env.VITE_API_URL;
+
+const ALL_POSITIONS = [
   "フロントエンドエンジニア",
   "バックエンドエンジニア",
   "インフラエンジニア",
   "プロジェクトマネージャー / ITコンサル",
-];
+] as const;
+
+type Position = (typeof ALL_POSITIONS)[number];
+
+type ApplyFormState = {
+  positions: Position[];
+  name: string;
+  phone: string;
+  email: string;
+  portfolio: string;
+  github: string;
+  resumeUrl: string;
+  message: string;
+};
+
+const initialForm: ApplyFormState = {
+  positions: [],
+  name: "",
+  phone: "",
+  email: "",
+  portfolio: "",
+  github: "",
+  resumeUrl: "",
+  message: "",
+};
+
+// Position の安全判定（外部入力 initialPosition 用）
+const isPosition = (v: string): v is Position =>
+  (ALL_POSITIONS as readonly string[]).includes(v);
 
 const ApplyForm = ({ initialPosition = "" }: Props) => {
   const navigate = useNavigate();
-  const [form, setForm] = useState({
-    position: "",
-    name: "",
-    email: "",
-    portfolio: "",
-		github: "",
-    resumeUrl: "",
-    message: "",
-  });
-  const [resumeFile, setResumeFile] = useState<File | null>(null); // ← 追加（ファイルアップ）
 
+  const [form, setForm] = useState<ApplyFormState>(initialForm);
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+
+  const updateField = <K extends keyof ApplyFormState>(
+    key: K,
+    value: ApplyFormState[K]
+  ) => {
+    setForm((p) => ({ ...p, [key]: value }));
+  };
+
+  /* 初期職種（URLから来たもの）をチェックON */
   useEffect(() => {
-    if (initialPosition) {
-      setForm((p) => ({ ...p, position: initialPosition }));
-    }
+    if (!initialPosition) return;
+    if (!isPosition(initialPosition)) return;
+
+    setForm((p) => ({
+      ...p,
+      positions: p.positions.includes(initialPosition)
+        ? p.positions
+        : [...p.positions, initialPosition], // 既存選択を保持して追加
+    }));
   }, [initialPosition]);
 
-  const onChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
-  ) => setForm({ ...form, [e.target.name]: e.target.value });
+  const togglePosition = (pos: Position) => {
+    updateField(
+      "positions",
+      form.positions.includes(pos)
+        ? form.positions.filter((x) => x !== pos)
+        : [...form.positions, pos]
+    );
+  };
 
-  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const name = e.target.name;
+
+    // ここにない name は無視（安全策）
+    if (
+      name !== "name" &&
+      name !== "phone" &&
+      name !== "email" &&
+      name !== "portfolio" &&
+      name !== "github" &&
+      name !== "resumeUrl" &&
+      name !== "message"
+    ) {
+      return;
+    }
+
+    updateField(name, e.target.value);
+  };
+
+  const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] ?? null;
-    // 例: 10MB制限
+
     if (f && f.size > 10 * 1024 * 1024) {
       alert("ファイルサイズは10MB以下にしてください。");
       e.currentTarget.value = "";
-      setResumeFile(null);
       return;
     }
     setResumeFile(f);
   };
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-		  // 履歴書が URL もファイルも空ならエラー
-		if (!form.resumeUrl.trim() && !resumeFile) {
-			alert("履歴書をURLまたはファイルで提出してください。");
-			return;
-		}
+    if (!API_BASE) {
+      alert("送信先(API URL)が未設定です。管理者にご連絡ください。");
+      return;
+    }
 
-		if (!form.message) {
-			alert("自己PR・備考を入力してください。");
-			return;
-		}
+    if (form.positions.length === 0) {
+      alert("応募職種を1つ以上選択してください。");
+      return;
+    }
+    if (!form.resumeUrl.trim() && !resumeFile) {
+      alert("職務経歴書 / スキルシート をURLまたはファイルでご提出してください。");
+      return;
+    }
+    if (!form.message.trim()) {
+      alert("自己PR・備考をご入力してください。");
+      return;
+    }
 
-    // 送信処理　(例) FormDataに詰める（バックエンド実装時にPOST）
-    const fd = new FormData();
-    fd.append("position", form.position);
-    fd.append("name", form.name);
-    fd.append("email", form.email);
-    fd.append("portfolio", form.portfolio);
-    fd.append("github", form.github);
-    fd.append("resumeUrl", form.resumeUrl);
-    fd.append("message", form.message);
-    if (resumeFile) fd.append("resumeFile", resumeFile);
+    try {
+      const fd = new FormData();
+      form.positions.forEach((p) => fd.append("positions[]", p));
+      fd.append("name", form.name);
+      fd.append("phone", form.phone);
+      fd.append("email", form.email);
+      fd.append("portfolio", form.portfolio);
+      fd.append("github", form.github);
+      fd.append("resumeUrl", form.resumeUrl);
+      fd.append("message", form.message);
+      if (resumeFile) fd.append("resumeFile", resumeFile);
 
-    // 成功したらサンクスへ。state で名前・職種を渡す
-    navigate("/apply/thanks", {
-      state: { name: form.name, position: form.position },
-      replace: true, // 戻るボタンで再送信しにくくするため任意で
-    });
+      const res = await fetch(`${API_BASE}/api/apply`, {
+        method: "POST",
+        body: fd,
+      });
 
-    console.log("応募データ(デバッグ):", {
-      ...form,
-      resumeFile: resumeFile ? { name: resumeFile.name, size: resumeFile.size } : null,
-    });
+      const data: unknown = await res.json().catch(() => ({}));
 
-    // alert("応募を送信しました。ありがとうございます！");
-    // setForm({
-    //   position: initialPosition || "",
-    //   name: "",
-    //   email: "",
-    //   portfolio: "",
-    //   github: "",
-    //   resumeUrl: "",
-    //   message: "",
-    // });
-    // setResumeFile(null);
+      if (!res.ok) {
+        let msg = "応募の送信に失敗しました。";
+        if (
+          typeof data === "object" &&
+          data !== null &&
+          "message" in data &&
+          typeof (data as { message?: unknown }).message === "string"
+        ) {
+          msg = (data as { message: string }).message;
+        }
+        throw new Error(msg);
+      }
+
+      navigate("/apply/thanks", {
+        state: { name: form.name, positions: form.positions },
+        replace: true,
+      });
+
+      setForm(initialForm);
+      setResumeFile(null);
+    } catch {
+      alert("応募の送信中にエラーが発生しました。");
+    }
   };
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-20">
-      <h2 className="text-3xl font-bold text-center mb-12">応募フォーム</h2>
+      <h2 className="text-3xl font-bold text-center mb-4">応募フォーム</h2>
 
-      <form onSubmit={onSubmit} className="space-y-6 bg-white p-8 rounded-lg shadow-md">
-        {/* 応募職種 */}
-        {form.position ? (
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">
-							応募職種 <span className="text-red-500">*</span>
-						</label>
-            <input
-              type="text"
-              name="position"
-              value={form.position}
-              onChange={onChange}
-              className="w-full border rounded-md px-4 py-2"
-              readOnly
-            />
+      {form.positions.length > 0 && (
+        <p className="text-center text-gray-600 mb-8">
+          応募職種：
+          <span className="font-semibold">{form.positions.join(" / ")}</span>
+        </p>
+      )}
+
+      <form
+        onSubmit={onSubmit}
+        className="space-y-6 bg-white p-8 rounded-lg shadow-md"
+      >
+        {/* 応募職種（チェックボックス） */}
+        <div>
+          <label className="block text-gray-700 font-semibold mb-3">
+            応募職種 <span className="text-red-500">*</span>
+          </label>
+          <div className="grid md:grid-cols-2 gap-3">
+            {ALL_POSITIONS.map((p) => (
+              <label key={p} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.positions.includes(p)}
+                  onChange={() => togglePosition(p)}
+                  className="accent-blue-600"
+                />
+                <span>{p}</span>
+              </label>
+            ))}
           </div>
-        ) : (
-          <>
-            {/* 応募職種（未指定時は選択させる） */}
-						<div>
-							<label className="block text-gray-700 font-semibold mb-2">
-								応募職種 <span className="text-red-500">*</span>
-							</label>
-							<select
-								name="position"
-								value={form.position}
-								onChange={onChange}
-								required
-								className="w-full border rounded-md px-4 py-2 bg-white"
-							>
-								<option value="" disabled>選択してください</option>
-								{positions.map((p) => (
-									<option key={p} value={p}>{p}</option>
-								))}
-							</select>
-						</div>
-					</>
-				)}
+        </div>
 
         <div>
           <label className="block text-gray-700 font-semibold mb-2">
-						お名前 <span className="text-red-500">*</span>
-					</label>
+            お名前 <span className="text-red-500">*</span>
+          </label>
           <input
             name="name"
             value={form.name}
             onChange={onChange}
             required
-            autoComplete="name"
             className="w-full border rounded-md px-4 py-2"
           />
         </div>
 
         <div>
           <label className="block text-gray-700 font-semibold mb-2">
-						メールアドレス <span className="text-red-500">*</span>
-					</label>
+            メールアドレス <span className="text-red-500">*</span>
+          </label>
           <input
             type="email"
             name="email"
@@ -167,38 +235,25 @@ const ApplyForm = ({ initialPosition = "" }: Props) => {
         </div>
 
         <div>
-          <label className="block text-gray-700 font-semibold mb-2">ポートフォリオURL</label>
+          <label className="block text-gray-700 font-semibold mb-2">
+            お電話番号 <span className="text-red-500">*</span>
+          </label>
           <input
-            name="portfolio"
-            value={form.portfolio}
+            name="phone"
+            value={form.phone}
             onChange={onChange}
-            placeholder="https://..."
-            inputMode="url"
-            pattern="https?://.+"
-            className="w-full border rounded-md px-4 py-2"
-          />
-          <p className="text-xs text-gray-500 mt-1">例: https://example.com/portfolio</p>
-        </div>
-
-        <div>
-          <label className="block text-gray-700 font-semibold mb-2">GithubアカウントURL</label>
-          <input
-            name="github"
-            value={form.github || ""}
-            onChange={onChange}
-            placeholder="https://github.com/username"
-            inputMode="url"
-            pattern="https?://.+"
+            required
+            inputMode="tel"
+            placeholder="090-1234-5678"
             className="w-full border rounded-md px-4 py-2"
           />
         </div>
 
-        {/* 履歴書はURLでもファイルでもOKに */}
         <div className="grid md:grid-cols-2 gap-4">
           <div>
             <label className="block text-gray-700 font-semibold mb-2">
-							履歴書/職務経歴書URL
-						</label>
+              職務経歴書 / スキルシート URL
+            </label>
             <input
               name="resumeUrl"
               value={form.resumeUrl}
@@ -208,19 +263,22 @@ const ApplyForm = ({ initialPosition = "" }: Props) => {
               pattern="https?://.+"
               className="w-full border rounded-md px-4 py-2"
             />
-            <p className="text-xs text-gray-500 mt-1 text-red-500">
-							※ URL またはファイルのいずれか必須
-						</p>
+            <p className="text-xs text-red-500 mt-1">※ URL またはファイルのいずれか必須</p>
           </div>
+
           <div>
             <label className="block text-gray-700 font-semibold mb-2">
-							履歴書ファイル（10MBまで）
-						</label>
+              職務経歴書 / スキルシート ファイル（10MBまで）
+            </label>
             <input
               type="file"
-              accept=".pdf,.doc,.docx,.txt,.md,.pages,.rtf,.png,.jpg,.jpeg"
+              accept=".pdf,.doc,.docx,.txt,.md,.rtf,.png,.jpg,.jpeg"
               onChange={onFileChange}
-              className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              className="block w-full text-sm text-gray-700
+                file:mr-4 file:py-2 file:px-4
+                file:rounded-md file:border-0
+                file:bg-blue-50 file:text-blue-700
+                hover:file:bg-blue-100"
             />
             {resumeFile && (
               <p className="text-xs text-gray-500 mt-1">
@@ -232,20 +290,23 @@ const ApplyForm = ({ initialPosition = "" }: Props) => {
 
         <div>
           <label className="block text-gray-700 font-semibold mb-2">
-						自己PR・備考 <span className="text-red-500">*</span>
-					</label>
+            自己PR・備考 <span className="text-red-500">*</span>
+          </label>
           <textarea
             name="message"
             rows={5}
             value={form.message}
             onChange={onChange}
-						required
+            required
             className="w-full border rounded-md px-4 py-2"
           />
         </div>
 
         <div className="text-center">
-          <button type="submit" className="bg-blue-600 text-white px-8 py-3 rounded-md font-semibold hover:bg-blue-700 transition">
+          <button
+            type="submit"
+            className="bg-blue-600 text-white px-8 py-3 rounded-md font-semibold hover:bg-blue-700 transition"
+          >
             応募する
           </button>
         </div>

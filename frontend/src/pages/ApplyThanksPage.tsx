@@ -16,8 +16,8 @@ const ApplyThanksPage = () => {
       </p>
 
       <p className="text-gray-600 mb-10">
-        担当者が内容を確認し、追ってご連絡いたします。<br />
-        しばらくお待ちください。
+        担当者が内容を確認し、追ってご連絡いたします。<br /><br />
+        今しばらくお待ちくださいませ。
       </p>
 
       <div className="flex gap-4 justify-center">

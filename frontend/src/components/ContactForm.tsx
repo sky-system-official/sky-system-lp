@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
 type Errors = Partial<{
@@ -10,39 +11,87 @@ type Errors = Partial<{
   submit: string;
 }>;
 
+const API_BASE = import.meta.env.VITE_API_URL; // 例: http://localhost:8787
+
 const INQUIRY_TYPES = ["お見積り", "ご相談", "採用関連", "その他"] as const;
+type InquiryType = (typeof INQUIRY_TYPES)[number];
+
+type FormState = {
+  name: string;
+  company: string;
+  email: string;
+  phone: string;
+  type: "" | InquiryType;
+  subject: string;
+  message: string;
+  agree: boolean;
+  honey: string; // honeypot
+};
+
+const initialForm: FormState = {
+  name: "",
+  company: "",
+  email: "",
+  phone: "",
+  type: "",
+  subject: "",
+  message: "",
+  agree: false,
+  honey: "",
+};
 
 const ContactForm = () => {
-  const [form, setForm] = useState({
-    name: "",
-    company: "",
-    email: "",
-    phone: "",
-    type: "" as "" | (typeof INQUIRY_TYPES)[number],
-    subject: "",
-    message: "",
-    agree: false,
-    honey: "", // honeypot（人間は触れない）
-  });
+  const [form, setForm] = useState<FormState>(initialForm);
   const navigate = useNavigate();
 
   const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
-  const [sent, setSent] = useState(false);
   const startedAtRef = useRef<number>(Date.now());
 
+  const updateField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+    setForm((p) => ({ ...p, [key]: value }));
+    setErrors((prev) => ({ ...prev, [key]: undefined, submit: undefined }));
+  };
+
   const onChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
-    const { name, type } = e.target;
-    const value = type === "checkbox"
-      ? (e.target as HTMLInputElement).checked
-      : e.target.value;
-    setForm((p) => ({ ...p, [name]: value as any }));
-    setErrors((prev) => ({ ...prev, [name]: undefined, submit: undefined }));
+    const field = e.target.name;
+
+    // ここで「知らない name」は無視（安全策）
+    if (
+      field !== "name" &&
+      field !== "company" &&
+      field !== "email" &&
+      field !== "phone" &&
+      field !== "type" &&
+      field !== "subject" &&
+      field !== "message" &&
+      field !== "agree" &&
+      field !== "honey"
+    ) {
+      return;
+    }
+
+    if (field === "agree") {
+      updateField("agree", (e.target as HTMLInputElement).checked);
+      return;
+    }
+
+    const value = e.target.value;
+
+    if (field === "type") {
+      // select の options が限定されている前提でOK（空文字も許容）
+      updateField("type", value === "" ? "" : (value as InquiryType));
+      return;
+    }
+
+    // それ以外は全部 string
+    updateField(field, value);
   };
 
   const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
   const validate = (): Errors => {
     const e: Errors = {};
     if (!form.name.trim()) e.name = "お名前を入力してください。";
@@ -55,13 +104,12 @@ const ContactForm = () => {
     return e;
   };
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
     // --- スパム対策：ハニーポット or 送信が早すぎる ---
     const tookMs = Date.now() - startedAtRef.current;
     if (form.honey || tookMs < 1500) {
-      // サイレントにサンクスへ（本番は200返す等でOK）
       navigate("/contact/thanks", { state: { name: form.name }, replace: true });
       return;
     }
@@ -81,7 +129,7 @@ const ContactForm = () => {
 
     try {
       setSubmitting(true);
-      // 実サービスではここを任意のAPIに変更
+
       const payload = {
         name: form.name.trim(),
         company: form.company.trim(),
@@ -92,69 +140,57 @@ const ContactForm = () => {
         message: form.message.trim(),
       };
 
-      // 例：アプリ内APIにPOST（実装するまでコメントアウトでもOK）
-      // const res = await fetch("/api/contact", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify(payload),
-      // });
-      // if (!res.ok) throw new Error("failed");
+      const res = await fetch(`${API_BASE}/api/contact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-      // --- 成功時：サンクスへ遷移 ---
+      if (!res.ok) {
+        let msg = "送信に失敗しました。時間を置いて再度お試しください。";
+        try {
+          const data: unknown = await res.json();
+          if (
+            typeof data === "object" &&
+            data !== null &&
+            "message" in data &&
+            typeof (data as { message?: unknown }).message === "string"
+          ) {
+            msg = (data as { message: string }).message;
+          }
+        } catch {}
+        throw new Error(msg);
+      }
+
       navigate("/contact/thanks", {
         state: { name: form.name },
-        replace: true, // 戻るで再送信を防ぎたい時は付ける
+        replace: true,
       });
 
-      // （遷移後にアンマウントされる想定だが、念のため初期化）
-      setForm({
-        name: "",
-        company: "",
-        email: "",
-        phone: "",
-        type: "",
-        subject: "",
-        message: "",
-        agree: false,
-        honey: "",
-      });
+      setForm(initialForm);
       startedAtRef.current = Date.now();
-    } catch (err) {
+    } catch {
       setErrors((p) => ({ ...p, submit: "送信に失敗しました。時間を置いて再度お試しください。" }));
     } finally {
       setSubmitting(false);
     }
   };
 
-  // 送信後の簡易サクセス表示（同ページで表示）
-  if (sent) {
-    return (
-      <div className="max-w-3xl mx-auto px-6 py-20 text-center">
-        <h2 className="text-3xl font-bold mb-6">お問い合わせありがとうございました</h2>
-        <p className="text-gray-700 mb-8">
-          担当より折り返しご連絡いたします。<br />
-          しばらくお待ちください。
-        </p>
-        <a
-          href="/"
-          className="inline-block bg-blue-600 text-white px-6 py-3 rounded-md font-semibold hover:bg-blue-700 transition"
-        >
-          ホームへ戻る
-        </a>
-      </div>
-    );
-  }
-
   const inputClass = (hasError?: boolean) =>
     `w-full border rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-sky-300 ${
       hasError ? "border-red-500" : "border-gray-300"
     }`;
-  const help = (msg?: string) =>
-    msg ? <p className="mt-1 text-sm text-red-600">{msg}</p> : null;
+
+  const help = (msg?: string) => (msg ? <p className="mt-1 text-sm text-red-600">{msg}</p> : null);
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-20">
-      <h2 className="text-3xl font-bold text-center mb-12">お問い合わせ<br/>（お仕事のご依頼やお見積りなど）</h2>
+      <h2 className="text-3xl font-bold text-center mb-12">
+        お問い合わせ
+        <br />
+        （お仕事のご依頼やお見積りなど）
+      </h2>
+
       {errors.submit && (
         <div className="mb-6 rounded-md border border-red-200 bg-red-50 p-4 text-red-800">
           {errors.submit}
@@ -190,9 +226,7 @@ const ContactForm = () => {
           </div>
 
           <div>
-            <label className="block text-gray-700 font-semibold mb-2">
-              会社名（任意）
-            </label>
+            <label className="block text-gray-700 font-semibold mb-2">会社名（任意）</label>
             <input
               name="company"
               value={form.company}
@@ -221,9 +255,7 @@ const ContactForm = () => {
           </div>
 
           <div>
-            <label className="block text-gray-700 font-semibold mb-2">
-              お電話番号（任意）
-            </label>
+            <label className="block text-gray-700 font-semibold mb-2">お電話番号（任意）</label>
             <input
               name="phone"
               value={form.phone}
@@ -248,18 +280,20 @@ const ContactForm = () => {
               className={inputClass(Boolean(errors.type))}
               aria-invalid={Boolean(errors.type)}
             >
-              <option value="" disabled>選択してください</option>
+              <option value="" disabled>
+                選択してください
+              </option>
               {INQUIRY_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>
+                  {t}
+                </option>
               ))}
             </select>
             {help(errors.type)}
           </div>
 
           <div>
-            <label className="block text-gray-700 font-semibold mb-2">
-              件名（任意）
-            </label>
+            <label className="block text-gray-700 font-semibold mb-2">件名（任意）</label>
             <input
               name="subject"
               value={form.subject}
@@ -284,7 +318,7 @@ const ContactForm = () => {
             placeholder="ご相談内容やご要望、希望納期やご予算感などがあればご記入ください。"
           />
           <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
-            <span>10文字以上で入力してください</span>
+            <span>10文字以上でご入力してください</span>
             <span>{form.message.length} 文字</span>
           </div>
           {help(errors.message)}
@@ -300,7 +334,8 @@ const ContactForm = () => {
             className="mt-1 h-4 w-4"
           />
           <label htmlFor="agree" className="text-sm text-gray-700">
-            <span className="font-medium">プライバシーポリシー</span>に同意します。<span className="text-red-500">*</span>
+            <span className="font-medium">プライバシーポリシー</span>に同意します。
+            <span className="text-red-500">*</span>
           </label>
         </div>
         {help(errors.agree)}
